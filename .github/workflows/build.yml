@@ -2,6 +2,11 @@ name: Build APK
 on:
   push:
   workflow_dispatch:
+
+# Serve per creare la release con l'APK (gli aggiornamenti OTA leggono da lì).
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,9 +25,22 @@ jobs:
         with:
           gradle-version: 8.9
       - name: Compila
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleRelease --no-daemon
         working-directory: ${{ env.PROJ }}
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+      - name: Prepara l'APK
+        run: cp "${{ env.PROJ }}/app/build/outputs/apk/release/app-release.apk" Dimmer.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Dimmer-debug
-          path: ${{ env.PROJ }}/app/build/outputs/apk/debug/app-debug.apk
+          name: Dimmer
+          path: Dimmer.apk
+      - name: Pubblica la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ github.run_number }}" Dimmer.apk \
+            --target "${{ github.sha }}" \
+            --title "Dimmer v${{ github.run_number }}" \
+            --notes "Build automatica ${{ github.run_number }}" \
+            --latest
